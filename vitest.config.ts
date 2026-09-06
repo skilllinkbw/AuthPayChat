@@ -10,6 +10,14 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
+    // better-sqlite3 is a native module. On Windows + Node >= 20, forked workers
+    // trip a V8 assertion during native-addon finalization. vmThreads with a single
+    // thread per worker gives us process-level isolation without the fork teardown crash.
+    pool: 'vmThreads',
+    poolOptions: {
+      threads: { singleThread: true },
+    },
+    setupFiles: ['tests/setup.ts'],
     include: ['tests/**/*.test.ts', 'apps/**/*.test.ts', 'packages/**/*.test.ts'],
     testTimeout: 20000,
     coverage: { provider: 'v8', reporter: ['text'] },

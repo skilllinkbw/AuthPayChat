@@ -33,6 +33,7 @@ export type AuditAction =
   | 'payment.duplicate_blocked'
   | 'payment.reconciled'
   | 'payment.refunded'
+  | 'payment.reversed'
   | 'webhook.received'
   | 'webhook.rejected'
   | 'webhook.replay_blocked'

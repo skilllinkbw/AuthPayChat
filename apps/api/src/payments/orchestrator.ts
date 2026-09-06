@@ -330,6 +330,24 @@ export class PaymentOrchestrator {
       this.onSuccessful(intent.id);
     } else if (to === 'FAILED' || to === 'CANCELLED' || to === 'EXPIRED') {
       audit('payment.failed', { type: 'payment_intent', id: intent.id, metadata: { status: to } }, { actorUserId: intent.user_id });
+      // The payer must hear about a non-completion from us, not discover it later.
+      // Never claimed as "money lost" — the message states the payment did not go through.
+      repo.notifications.create({
+        userId: intent.user_id,
+        type: `payment.${to.toLowerCase()}`,
+        title: 'Payment not completed',
+        body: `Your payment to ${intent.recipient_label} was ${to.toLowerCase()}. No money has left your account for this payment.`,
+        data: { intentId: intent.id },
+      });
+    } else if (to === 'REVERSED' || to === 'REFUNDED') {
+      audit('payment.reversed', { type: 'payment_intent', id: intent.id, metadata: { status: to } }, { actorUserId: intent.user_id });
+      repo.notifications.create({
+        userId: intent.user_id,
+        type: `payment.${to.toLowerCase()}`,
+        title: to === 'REVERSED' ? 'Payment reversed' : 'Refund received',
+        body: `Your payment of ${intent.currency} ${(intent.amount_minor / 100).toFixed(2)} to ${intent.recipient_label} was ${to.toLowerCase()}.`,
+        data: { intentId: intent.id },
+      });
     }
     return true;
   }
@@ -369,6 +387,18 @@ export class PaymentOrchestrator {
       body: `${providerLabel}: payment to ${intent.recipient_label} was successful.`,
       data: { intentId: intent.id },
     });
+    // Money in. When the recipient is a PayChat user they get their own notification —
+    // this covers every incoming rail (chat payment, payment link, QR) because they all
+    // settle through onSuccessful. No notification is invented for external recipients.
+    if (intent.recipient_user_id && intent.recipient_user_id !== intent.user_id) {
+      repo.notifications.create({
+        userId: intent.recipient_user_id,
+        type: 'payment.received',
+        title: 'Money received',
+        body: `${intent.currency} ${(intent.amount_minor / 100).toFixed(2)} received from ${user?.display_name ?? intent.recipient_handle}.`,
+        data: { intentId: intent.id },
+      });
+    }
     repo.outbox.publish('payment.succeeded', { intentId: intent.id, userId: intent.user_id });
 
     if (intent.account_id) {

@@ -642,8 +642,18 @@ export const notifications = {
   listForUser(userId: string) {
     return db().prepare('SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 50').all(userId) as Array<Record<string, unknown>>;
   },
+  findById(id: string) {
+    return db().prepare('SELECT * FROM notifications WHERE id = ?').get(id) as (Record<string, unknown> & { user_id: string }) | undefined;
+  },
   markRead(userId: string, id: string): void {
     db().prepare('UPDATE notifications SET read_at = ? WHERE id = ? AND user_id = ?').run(nowIso(), id, userId);
+  },
+  unreadCount(userId: string): number {
+    const row = db().prepare('SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL').get(userId) as { n: number };
+    return row.n;
+  },
+  markAllRead(userId: string): void {
+    db().prepare('UPDATE notifications SET read_at = ? WHERE user_id = ? AND read_at IS NULL').run(nowIso(), userId);
   },
 };
 

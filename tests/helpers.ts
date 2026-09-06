@@ -10,6 +10,9 @@ import { clearChallenges } from '../apps/api/src/security/challenges.js';
 import { config } from '../apps/api/src/config.js';
 
 process.env.PAYCHAT_ENV = 'test';
+// Reconciliation endpoints (/api/internal/*) are protected by this token. A stable
+// test value keeps those tests deterministic; production requires the real secret.
+process.env.INTERNAL_JOB_TOKEN ??= 'test-token';
 
 export interface TestUser {
   userId: string;

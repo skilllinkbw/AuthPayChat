@@ -15,6 +15,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, extname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createServer as createHttpServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { parsePaymentCommand, flagUnsupportedMethod } from '@paychat/nlp';
@@ -35,7 +36,9 @@ import { clearChallenges } from '../apps/api/src/security/challenges.js';
 import * as repo from '../apps/api/src/repositories.js';
 import { registerUser, addContact, stepUp } from './helpers.js';
 
-const ROOT = new URL('..', import.meta.url).pathname;
+// Repo root as a real Windows/Unix path. (URL `.pathname` would prefix `/C:/` on Windows
+// and break every readdirSync below — a faithful repo-level test must use fileURLToPath.)
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
@@ -50,6 +53,11 @@ function walk(dir: string, out: string[] = []): string[] {
 /** Provider names that must NEVER appear in core code (only in the data file / these tests). */
 const FORBIDDEN_NAMES = ['orange', 'myzaka', 'smega', 'authepay', 'omascom', 'banka', 'karete'];
 
+/** Normalises path separators so the data-file exclusion works on Windows too. */
+function isProviderDataFile(filePath: string): boolean {
+  return filePath.split(/[\\/]/).join('/').includes('providers/definitions.ts');
+}
+
 describe('Provider architecture — no provider is hard-coded in core', () => {
   it('core source files contain no provider name', () => {
     const offenders: string[] = [];
@@ -57,7 +65,7 @@ describe('Provider architecture — no provider is hard-coded in core', () => {
       for (const path of walk(file)) {
         const relative = path.replace(ROOT, '');
         // The registry's DATA file legitimately declares defaults; tests legitimately assert on them.
-        if (relative.includes('providers/definitions.ts')) continue;
+        if (isProviderDataFile(relative)) continue;
         if (relative.startsWith('tests/')) continue;
         if (relative.includes('/__tests__/')) continue;
         const text = readFileSync(path, 'utf8').toLowerCase();
@@ -78,7 +86,7 @@ describe('Provider architecture — no provider is hard-coded in core', () => {
     const offenders: string[] = [];
     for (const path of walk(join(ROOT, 'apps/api/src'))) {
       const relative = path.replace(ROOT, '');
-      if (relative.includes('providers/definitions.ts')) continue;
+      if (isProviderDataFile(relative)) continue;
       const text = readFileSync(path, 'utf8');
       if (/provider_?id\s*===?\s*['"]|provider_?id\s*==\s*['"]|case\s+['"][a-z_]+_bw['"]/i.test(text)) offenders.push(relative);
       if (/switch\s*\(\s*provider/i.test(text)) offenders.push(relative);
@@ -91,7 +99,7 @@ describe('Provider architecture — no provider is hard-coded in core', () => {
     const allDeps = JSON.stringify(pkg).toLowerCase();
     expect(allDeps).not.toContain('authepay');
     for (const path of walk(join(ROOT, 'apps/api/src'))) {
-      if (path.includes('providers/definitions.ts')) continue;
+      if (isProviderDataFile(path)) continue;
       expect(readFileSync(path, 'utf8').toLowerCase()).not.toContain('authepay');
     }
   });

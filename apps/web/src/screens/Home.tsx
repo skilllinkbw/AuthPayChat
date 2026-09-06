@@ -11,6 +11,7 @@ export function Home({ lang, hideBalances }: { lang: Lang; hideBalances: boolean
   const [conversations, setConversations] = useState<Conversation[] | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [query, setQuery] = useState('');
+  const [unreadInbox, setUnreadInbox] = useState(0);
 
   useEffect(() => {
     void (async () => {
@@ -25,6 +26,17 @@ export function Home({ lang, hideBalances }: { lang: Lang; hideBalances: boolean
         setConversations([]);
       }
     })();
+  }, []);
+
+  // Inbox badge — polled so a received payment surfaces on the home screen too.
+  useEffect(() => {
+    let cancelled = false;
+    const tick = () => void api.get<{ unreadCount: number }>('/api/notifications')
+      .then((d) => { if (!cancelled) setUnreadInbox(d.unreadCount); })
+      .catch(() => undefined);
+    tick();
+    const interval = setInterval(tick, 15000);
+    return () => { cancelled = true; clearInterval(interval); };
   }, []);
 
   const currencies = [...new Set(accounts.map((a) => a.currency))];
@@ -45,6 +57,23 @@ export function Home({ lang, hideBalances }: { lang: Lang; hideBalances: boolean
         <img className="logo" src="/paychat-mark.png" alt="PayChat" />
         <h1>PayChat</h1>
         <span className="spacer" />
+        <button
+          className="btn ghost"
+          style={{ width: 'auto', position: 'relative' }}
+          type="button"
+          onClick={() => navigate('/inbox')}
+          aria-label={t('inbox.title')}
+        >
+          🔔
+          {unreadInbox > 0 && (
+            <span
+              className="badge"
+              style={{ position: 'absolute', top: -4, right: -4, background: 'var(--brand-teal)', color: '#fff', border: 0 }}
+            >
+              {unreadInbox}
+            </span>
+          )}
+        </button>
         <span className={`pill ${online ? 'online' : 'offline'}`}>{online ? '●' : '○'}</span>
       </header>
 

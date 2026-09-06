@@ -13,13 +13,17 @@ import type { Redis } from 'ioredis';
 
 const REDIS_URL = process.env.REDIS_URL?.trim() ?? '';
 
-describe('Redis infrastructure — shared rate limiting and locking', () => {
+// The shared rate-limiting/locking/caching suite needs a real Redis. When a developer has
+// not configured REDIS_URL we skip it (BLOCKED — EXTERNAL SERVICE REQUIRED) instead of
+// failing against an unavailable localhost instance; the in-process fallback suite below
+// still runs and proves the app degrades safely without Redis.
+describe.skipIf(REDIS_URL === '')('Redis infrastructure — shared rate limiting and locking', () => {
   let app: FastifyInstance;
   let infra: typeof import('../apps/api/src/infra/redis.js');
   let redis: Redis | null;
 
   beforeAll(async () => {
-    process.env.REDIS_URL = REDIS_URL || 'redis://127.0.0.1:6379';
+    process.env.REDIS_URL = REDIS_URL;
     infra = await import('../apps/api/src/infra/redis.js');
     redis = infra.getRedis();
     if (redis) {

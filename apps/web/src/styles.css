@@ -188,6 +188,12 @@ input.field:focus, select.field:focus { border-color: var(--brand-teal); }
 .avatar { width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; color: #fff; font-weight: 700; flex: 0 0 auto; }
 .list-item { display: flex; gap: 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); width: 100%; text-align: left; background: transparent; border-left: 0; border-right: 0; border-top: 0; }
 .skeleton { background: linear-gradient(90deg, #eef2f7, #f7f9fc, #eef2f7); background-size: 200% 100%; animation: shimmer 1.2s infinite; border-radius: 8px; height: 14px; }
+
+/* ---------- inbox ---------- */
+/* Unread notifications are distinguished by weight and a dot, never colour alone. */
+.list-item.unread { background: rgba(0, 168, 143, 0.05); }
+.list-item.unread .strong { font-weight: 800; }
+.dot-unread { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--brand-teal, #00A88F); margin-left: 6px; vertical-align: middle; }
 @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
 @media (prefers-color-scheme: dark) {

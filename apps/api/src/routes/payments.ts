@@ -649,11 +649,28 @@ export function paymentRoutes(app: FastifyInstance, orchestrator: PaymentOrchest
   });
 
   app.get('/api/notifications', { preHandler: requireAuth }, async (request) => {
-    return { notifications: repo.notifications.listForUser(request.auth!.userId) };
+    const notifications = repo.notifications.listForUser(request.auth!.userId).map((n) => {
+      // Attach the receipt reference when the notification is tied to a settled payment,
+      // so the Inbox can deep-link to the verified receipt without a second lookup.
+      const data = JSON.parse(String(n.data_json ?? '{}')) as { intentId?: string };
+      const receipt = data.intentId ? repo.receipts.findByIntent(data.intentId) : undefined;
+      return { ...n, receiptId: receipt?.id ?? null };
+    });
+    return { notifications, unreadCount: repo.notifications.unreadCount(request.auth!.userId) };
+  });
+
+  app.post('/api/notifications/read-all', { preHandler: requireAuth }, async (request, reply) => {
+    repo.notifications.markAllRead(request.auth!.userId);
+    return reply.send({ ok: true });
   });
 
   app.post('/api/notifications/:id/read', { preHandler: requireAuth }, async (request, reply) => {
     const { id } = request.params as { id: string };
+    // Ownership is checked explicitly: a stranger must get a 404, not a silent no-op success.
+    const notification = repo.notifications.findById(id);
+    if (!notification || notification.user_id !== request.auth!.userId) {
+      throw Errors.notFound('Notification');
+    }
     repo.notifications.markRead(request.auth!.userId, id);
     return reply.send({ ok: true });
   });

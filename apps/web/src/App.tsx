@@ -7,6 +7,7 @@ import { Chat } from './screens/Chat.js';
 import { Contacts } from './screens/Contacts.js';
 import { Balances } from './screens/Balances.js';
 import { Activity, ReceiptView } from './screens/Activity.js';
+import { Inbox } from './screens/Inbox.js';
 import { Settings } from './screens/Settings.js';
 import { Scan } from './screens/Scan.js';
 import { Merchant } from './screens/Merchant.js';
@@ -85,6 +86,7 @@ export default function App() {
               <Balances lang={lang} hideBalances={user.hideBalances} onToggleHide={toggleHide} />
             } />
             <Route path="/activity" element={<Activity lang={lang} />} />
+            <Route path="/inbox" element={<Inbox lang={lang} />} />
             <Route path="/receipt/:id" element={<ReceiptView lang={lang} />} />
             <Route path="/scan" element={<Scan lang={lang} />} />
             <Route path="/merchant" element={
