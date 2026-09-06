@@ -1,0 +1,104 @@
+name: PayChat CI
+
+# Quality gate. A red pipeline blocks the merge: nothing here suppresses a vulnerability,
+# skips a failing test, or turns a real check into a warning to obtain a green tick.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  verify:
+    name: Typecheck, lint, tests, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint (no warnings allowed)
+        run: npx eslint . --max-warnings 0
+      - name: Tests (no cached results)
+        run: npx vitest run --reporter=verbose
+        env:
+          INTERNAL_JOB_TOKEN: ci-internal-token
+      - name: Build
+        run: npm run build
+      - name: Secret scan
+        run: npx tsx scripts/verify-secrets.ts
+      - name: Dependency audit (fails on high or critical)
+        run: npm audit --audit-level=high --omit=dev
+      - name: End-to-end smoke
+        run: |
+          npm run seed
+          PAYCHAT_ENV=development DATABASE_PATH=.data/ci.db JWT_SECRET=ci-secret-change-me \
+          TOKEN_ENCRYPTION_KEY=ci-key-change-me INTERNAL_JOB_TOKEN=ci-internal-token PORT=4000 \
+          node dist/api/index.js &
+          npx wait-on http://127.0.0.1:4000/healthz
+          npx tsx scripts/e2e-smoke.ts http://127.0.0.1:4000
+
+  migrations:
+    name: Migration discovery in clean environments
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npx tsx scripts/verify-migrations.ts
+
+  database:
+    name: Postgres row-level security
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npx tsx scripts/verify-rls.ts
+        env:
+          PG_ADMIN_URL: postgres://postgres:postgres@127.0.0.1:5432/postgres
+
+  redis:
+    name: Redis-backed rate limiting and locking
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npx tsx scripts/verify-redis.ts
+        env:
+          REDIS_URL: redis://127.0.0.1:6379
+      - name: Integration tests against real Redis
+        run: npx vitest run tests/redis.test.ts
+        env:
+          REDIS_URL: redis://127.0.0.1:6379
+          INTERNAL_JOB_TOKEN: ci-internal-token

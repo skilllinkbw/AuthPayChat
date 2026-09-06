@@ -1,0 +1,64 @@
+{
+  "name": "paychat",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PayChat — Chat. Pay. Done. Secure conversational payments, Botswana-first.",
+  "type": "module",
+  "engines": {
+    "node": ">=20.11"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c cyan,magenta \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "tsx watch apps/api/src/index.ts",
+    "dev:web": "vite --config apps/web/vite.config.ts",
+    "build": "npm run build:api && npm run build:web",
+    "build:shared": "tsc -p packages/shared/tsconfig.json",
+    "build:api": "esbuild apps/api/src/index.ts --bundle --platform=node --format=esm --target=node20 --packages=external --alias:@paychat/shared=./packages/shared/src/index.ts --alias:@paychat/nlp=./packages/nlp/src/index.ts --outfile=dist/api/index.js && mkdir -p dist/api/migrations && cp apps/api/src/db/migrations/*.sql dist/api/migrations/",
+    "build:web": "vite build --config apps/web/vite.config.ts",
+    "start": "node dist/api/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint . --max-warnings 0",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "verify": "npm run typecheck && npm run lint && npm run test && npm run build",
+    "seed": "tsx scripts/seed-demo.ts",
+    "verify:rls": "tsx scripts/verify-rls.ts",
+    "verify:migrations": "tsx scripts/verify-migrations.ts",
+    "verify:secrets": "tsx scripts/verify-secrets.ts",
+    "verify:deps": "npm audit --audit-level=high --omit=dev || true"
+  },
+  "dependencies": {
+    "@simplewebauthn/browser": "^13.1.0",
+    "@simplewebauthn/server": "^13.1.0",
+    "@types/pg": "^8.23.1",
+    "@types/qrcode": "^1.5.6",
+    "better-sqlite3": "^11.10.0",
+    "fastify": "^5.4.0",
+    "ioredis": "^6.0.0",
+    "pg": "^8.23.0",
+    "qrcode": "^1.5.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^7.18.3",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.18.0",
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.5",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.2",
+    "eslint": "^9.18.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.20.0",
+    "vite": "^6.0.7",
+    "vitest": "^3.2.7"
+  }
+}
