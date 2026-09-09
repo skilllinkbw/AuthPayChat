@@ -33,9 +33,16 @@ export function Auth({ lang, onAuthenticated }: { lang: Lang; onAuthenticated: (
 
   return (
     <div className="screen">
-      <div className="screen-scroll" style={{ paddingTop: 48 }}>
-        <img src="/paychat-logo.png" alt="PayChat" style={{ width: '78%', maxWidth: 300, display: 'block', margin: '0 auto 8px' }} />
-        <p className="center muted small" style={{ marginTop: 0 }}>{t('app.tagline')}</p>
+      <div className="screen-scroll" style={{ paddingTop: 40 }}>
+        <div style={{ textAlign: 'center', marginBottom: 8 }}>
+          <img src="/paychat-logo.png" alt="PayChat" style={{ width: '70%', maxWidth: 260, display: 'block', margin: '0 auto 4px' }} />
+          <p className="center muted small" style={{ marginTop: 0 }}>{t('app.tagline')}</p>
+        </div>
+
+        <div style={{ textAlign: 'center', margin: '8px 0 16px' }}>
+          <div className="company-brand">by Braincade Holdings (Pty) Ltd</div>
+          <div className="company-reg">Reg. No. BW00001951757</div>
+        </div>
 
         <div className="card">
           <h2 style={{ marginTop: 0 }}>{mode === 'login' ? t('auth.signin') : t('auth.welcome')}</h2>
@@ -72,9 +79,22 @@ export function Auth({ lang, onAuthenticated }: { lang: Lang; onAuthenticated: (
           </button>
         </div>
 
-        <p className="center tiny muted">
-          PayChat never stores your fingerprint or face. Payments are confirmed by your device and verified by our servers.
-        </p>
+        <div className="legal-footer">
+          <p className="center tiny muted">
+            PayChat is a product of Braincade Holdings (Pty) Ltd, a company registered in Botswana (Reg. No. BW00001951757).
+            Payments are processed through PayChat's secure payment rails.
+          </p>
+          <p className="center tiny">
+            <a href="#/terms" className="legal-link">Terms &amp; Conditions</a>
+            {' · '}
+            <a href="#/privacy" className="legal-link">Privacy Notice</a>
+            {' · '}
+            <a href="#/security-guide" className="legal-link">Safety Guidance</a>
+          </p>
+          <p className="center tiny muted">
+            +267 76 749 821 &nbsp;|&nbsp; +267 26 150 87
+          </p>
+        </div>
       </div>
     </div>
   );

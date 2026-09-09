@@ -11,6 +11,9 @@ import { Inbox } from './screens/Inbox.js';
 import { Settings } from './screens/Settings.js';
 import { Scan } from './screens/Scan.js';
 import { Merchant } from './screens/Merchant.js';
+import { Terms } from './screens/Terms.js';
+import { Privacy } from './screens/Privacy.js';
+import { SecurityGuide } from './screens/SecurityGuide.js';
 import { PaymentSheet, type ProposedPayment } from './components/PaymentSheet.js';
 import { formatMoney } from './lib.js';
 import { useT, type Lang } from './i18n.js';
@@ -74,7 +77,14 @@ export default function App() {
     <HashRouter>
       <div className="app">
         {!user ? (
-          <Auth lang={lang} onAuthenticated={setUser} />
+          <>
+            <Routes>
+              <Route path="/terms" element={<Terms lang={lang} />} />
+              <Route path="/privacy" element={<Privacy lang={lang} />} />
+              <Route path="/security-guide" element={<SecurityGuide lang={lang} />} />
+              <Route path="*" element={<Auth lang={lang} onAuthenticated={setUser} />} />
+            </Routes>
+          </>
         ) : (
           <Routes>
             <Route path="/" element={<Home lang={lang} hideBalances={user.hideBalances} />} />

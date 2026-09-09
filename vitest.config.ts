@@ -11,11 +11,18 @@ export default defineConfig({
   test: {
     environment: 'node',
     // better-sqlite3 is a native module. On Windows + Node >= 20, forked workers
-    // trip a V8 assertion during native-addon finalization. vmThreads with a single
-    // thread per worker gives us process-level isolation without the fork teardown crash.
-    pool: 'vmThreads',
+    // can trip a V8 assertion during native-addon finalization if the SQLite
+    // handle is still open at isolate teardown. tests/setup.ts closes the DB
+    // in a top-level afterAll (runs before the worker exits) to prevent that.
+    //
+    // NOTE: pool: 'vmThreads' does NOT support top-level afterAll/beforeAll in
+    // setup files — it throws "Vitest failed to find the current suite" and
+    // fails every test file at setup (0 tests run). 'forks' runs the setup
+    // lifecycle hooks correctly, so we use it here. run-tests.cjs spawns each
+    // test file in its own process and retries once on the residual native crash.
+    pool: 'forks',
     poolOptions: {
-      threads: { singleThread: true },
+      forks: { singleFork: true },
     },
     setupFiles: ['tests/setup.ts'],
     include: ['tests/**/*.test.ts', 'apps/**/*.test.ts', 'packages/**/*.test.ts'],

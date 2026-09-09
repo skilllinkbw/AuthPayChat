@@ -33,6 +33,10 @@
     "verify:deps": "npm audit --audit-level=high --omit=dev || true"
   },
   "dependencies": {
+    "@capacitor/android": "^8.0.0",
+    "@capacitor/cli": "^8.5.1",
+    "@capacitor/core": "^8.5.1",
+    "@capacitor/splash-screen": "^8.0.0",
     "@simplewebauthn/browser": "^13.1.0",
     "@simplewebauthn/server": "^13.1.0",
     "@types/pg": "^8.23.1",

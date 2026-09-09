@@ -7,3 +7,33 @@ coverage/
 .env.*
 !.env.example
 .DS_Store
+
+# ── Android (Capacitor) build outputs and local machine state ────────────────
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+android/capacitor-cordova-android-plugins/build/
+android/*.keystore
+android/*.jks
+*.log.meta
+
+# ── Release output (artifacts delivered outside Git, per release policy) ─────
+release/
+
+# ── Temporary / diagnostic files ──────────────────────────────────────────────
+_build/
+.vitest-result.json
+.vitest-debug.json
+.vitest-last.json
+.vitest-result.json
+
+# ── Stale duplicate Capacitor 6 Android project (authoritative: android/) ─────
+apps/web/android/
+apps/web/capacitor.config.ts
+
+# ── Superseded historical review packages (kept on disk, not in Git) ──────────
+BANK_REVIEW_PACKAGE/
+AUTHEPAY_BANK_REVIEW_PACKAGE/
+FINAL-PAYCHAT-RELEASE-REPORT.md
+

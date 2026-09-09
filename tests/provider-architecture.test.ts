@@ -58,14 +58,27 @@ function isProviderDataFile(filePath: string): boolean {
   return filePath.split(/[\\/]/).join('/').includes('providers/definitions.ts');
 }
 
+/**
+ * Demo fixtures: a single explicitly-named client-side demo data path (see
+ * apps/web/src/demo-fixtures/providers.ts). It carries ONLY sandbox/demo display
+ * labels for the standalone review APK — never production coupling. This is the
+ * same idea as providers/definitions.ts on the API side; every other file under
+ * apps/web/src must stay provider-agnostic.
+ */
+function isDemoFixtureFile(filePath: string): boolean {
+  return filePath.split(/[\\/]/).join('/').includes('src/demo-fixtures/');
+}
+
 describe('Provider architecture — no provider is hard-coded in core', () => {
   it('core source files contain no provider name', () => {
     const offenders: string[] = [];
     for (const file of [join(ROOT, 'apps/api/src'), join(ROOT, 'apps/web/src'), join(ROOT, 'packages')]) {
       for (const path of walk(file)) {
         const relative = path.replace(ROOT, '');
-        // The registry's DATA file legitimately declares defaults; tests legitimately assert on them.
+        // The registry's DATA file legitimately declares defaults; demo fixtures carry
+        // sandbox display labels for the standalone review APK; tests assert on all of these.
         if (isProviderDataFile(relative)) continue;
+        if (isDemoFixtureFile(relative)) continue;
         if (relative.startsWith('tests/')) continue;
         if (relative.includes('/__tests__/')) continue;
         const text = readFileSync(path, 'utf8').toLowerCase();

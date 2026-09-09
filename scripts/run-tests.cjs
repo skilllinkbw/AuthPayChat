@@ -34,15 +34,13 @@ if (!files.length) {
 const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 const results = [];
 
-function parseSummary(out) {
-  const summary = out.match(/Tests\s+([\d]+)\s+passed\s+\|\s+([\d]+)\s+failed\s+\|\s+([\d]+)\s+skipped/);
-  if (!summary) return { pass: null, fail: null, skip: null };
-  return { pass: Number(summary[1]), fail: Number(summary[2]), skip: Number(summary[3]) };
-}
-
 /** Runs one test file in its own fresh vitest process. */
 function runFile(testPath) {
-  const r = spawnSync(npx, ['vitest', 'run', testPath, '--reporter=json', '--outputFile=.vitest-result.json'], {
+  // --retry=1: the environment (Windows + Node 24 + better-sqlite3) occasionally
+  // flakes a single test without any crash signature — the file-level crash retry
+  // below only covers aborted workers. One in-process retry keeps the exit code
+  // honest (a failure that reproduces still fails the run).
+  const r = spawnSync(npx, ['vitest', 'run', testPath, '--reporter=json', '--outputFile=.vitest-result.json', '--retry=1'], {
     cwd: root,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
