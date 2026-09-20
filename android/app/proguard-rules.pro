@@ -1,3 +1,21 @@
+# ── PayChat release rules ────────────────────────────────────────────────────
+# Capacitor: the WebView bridge, plugin registry and native->JS entry points are
+# reached reflectively / by name at runtime, so they must survive obfuscation.
+-keep class com.getcapacitor.** { *; }
+-keepclassmembers class com.getcapacitor.** { *; }
+-keep @com.getcapacitor.annotation.CapacitorPlugin class * { *; }
+-keepclassmembers class * {
+    @com.getcapacitor.PluginMethod <methods>;
+}
+-keep class * extends com.getcapacitor.Plugin { *; }
+# Cordova compatibility layer (capacitor-cordova-android-plugins).
+-keep class org.apache.cordova.** { *; }
+# JS bridge annotation used by native -> WebView calls.
+-keepclassmembers class * { @android.webkit.JavascriptInterface <methods>; }
+# Keep line numbers in release stack traces for crash triage without exposing sources.
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
+
 # Add project specific ProGuard rules here.
 # You can control the set of applied configuration files using the
 # proguardFiles setting in build.gradle.

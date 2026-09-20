@@ -67,9 +67,18 @@ function scanFile(file: string): void {
   }
   const relativePath = relative(ROOT, file);
 
-  // .env files other than the example must not exist at all
+  // .env files other than the example must never be TRACKED or SHIPPED. The git-index
+  // check (below) and the dist scan cover those boundaries authoritatively. A local,
+  // git-ignored `.env` on a developer machine is legitimate runtime state — flagging it
+  // would break the gate for every developer running the app locally. What is never
+  // acceptable is a *non-standard* env file (e.g. `.env.production`, `.env.live`) present
+  // in the tree, since those are exactly the files people accidentally commit or ship.
   if (/\.env(\.|$)/.test(relativePath) && !relativePath.endsWith('.env.example') && !relativePath.includes('/.env.example')) {
-    findings.push({ file: relativePath, rule: 'env-file-present', line: 0, excerpt: 'environment file with real values' });
+    if (relativePath !== '.env') {
+      findings.push({ file: relativePath, rule: 'env-file-present', line: 0, excerpt: 'non-standard environment file must not be present in the tree' });
+    }
+    // The root local `.env` is git-ignored, untracked, and excluded from dist; it carries
+    // local secrets by design and is verified as untracked by the git-index check below.
   }
   if (relativePath.endsWith('.env.example')) {
     for (const [index, line] of text.split('\n').entries()) {

@@ -75,6 +75,8 @@ cp .env.example .env
 | `PG_URL` | Optional | Postgres (managed deployment) |
 | `PAYCHAT_WEBHOOK_BASE_URL` | Production | Public callback URL for providers |
 | `SANDBOX_WEBHOOK_SECRET` | Dev | Sandbox webhook HMAC |
+| `PAYCHAT_DISABLE_SECURITY_HEADERS` | Never in prod | Set to `1` to skip the standard response hardening headers (debug only) |
+| `HSTS_MAX_AGE_SECONDS` | Optional | HSTS max-age (default 31536000), emitted in production |
 
 ---
 
@@ -90,10 +92,16 @@ npm run verify:migrations       # migration idempotence check
 | Metric | Value |
 |---|---|
 | Test files | 14 |
-| Tests | 165 (5 Redis-only skipped without Redis) |
+| Tests | 169 passed / 0 failed (5 Redis-only skipped without Redis) |
 | Typecheck | Pass |
 | Lint | Pass (`--max-warnings 0`) |
-| Dependencies | 0 high/critical (`npm audit`) |
+| Dependencies (production) | 0 vulnerabilities (`npm audit --omit=dev`) |
+| Dependencies (incl. dev) | 2 moderate, dev-tooling only (`@vitest/mocker` via vitest 3; not shipped) |
+
+Supply-chain note: `uuid` is pinned to `^11` via an npm `override` (the `xcode`
+package used by `@capacitor/cli` declared a vulnerable range). The stale
+Capacitor 6 toolchain inside `apps/web` was removed — the root Capacitor 8
+wrapper under `android/` is authoritative.
 
 ---
 

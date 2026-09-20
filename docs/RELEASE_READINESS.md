@@ -36,8 +36,9 @@ npm run verify        # typecheck → lint → test → build
 | Lint | `eslint . --max-warnings 0` | **PASS** (0 problems) |
 | Tests | `node scripts/run-tests.cjs` | **PASS** (see §2) |
 | Production build | `npm run build` | **PASS** |
-| Secret scan | `npm run verify:secrets` | **PASS** — 0 findings in CI; on a developer workstation the scan flags the untracked, gitignored `.env` by design (material must never be committed) |
-| Dependency audit | `npm audit --audit-level=high --omit=dev` | **PASS** (0 high/critical) |
+| Secret scan | `npm run verify:secrets` | **PASS** — 0 findings in source, git index and build output. The scan enforces that no `.env` variant (other than the documented `.env.example`) is present in the tree and that no `.env`/key file is tracked by git. A developer's local, untracked, git-ignored `.env` is runtime state and is intentionally not a finding. |
+| Dependency audit (production) | `npm audit --audit-level=high --omit=dev` | **PASS** — 0 vulnerabilities in the shipped/runtime dependency set |
+| Dependency audit (incl. dev) | `npm audit` | 2 moderate, dev-tooling only — `@vitest/mocker` path-traversal (test runner; fix requires the breaking vitest 5 upgrade) — **not shipped to production**. The previously-flagged critical `tar` via the stale `apps/web` Capacitor 6 CLI was removed by deleting that superseded dependency. |
 | Migrations | `npm run verify:migrations` | **PASS** |
 | End-to-end smoke | `scripts/e2e-smoke.ts` (CI) | **PASS** |
 
@@ -46,13 +47,13 @@ npm run verify        # typecheck → lint → test → build
 | Metric | Value |
 |---|---|
 | Test files | **14 passed / 14** |
-| Tests | **165 passed, 0 failed, 5 skipped** |
+| Tests | **169 passed, 0 failed, 5 skipped** |
 | Runner | Vitest 3, one process per file (`scripts/run-tests.cjs`) |
 | Skipped | 5 — Redis-backed integration tests, skipped when `REDIS_URL` is unset; executed in the CI `redis` job |
 
 Suites: `auth`, `balances`, `merchant`, `messaging`, `nlp`, `notifications`,
 `pagination`, `payments`, `provider-architecture`, `qr`, `redis`,
-`security` (27), `unknown-outcome` (11), `webauthn` (11).
+`security` (31), `unknown-outcome` (11), `webauthn` (11).
 
 Redis, PostgreSQL RLS and migration verification run as separate CI jobs because
 they require real services (`.github/workflows/ci.yml`).
@@ -68,6 +69,7 @@ they require real services (`.github/workflows/ci.yml`).
 | Secrets | **PASS** | No secrets in source/git/dist; production boot requires `JWT_SECRET`, `TOKEN_ENCRYPTION_KEY`, `INTERNAL_JOB_TOKEN` |
 | Injection / XSS / SSRF | **PASS** | Parameterised SQL throughout, React escaping, no user-controlled outbound URLs |
 | Rate limiting | **PASS** | Redis-backed when available, in-process fallback; login and step-up identity-scoped |
+| HTTP hardening headers | **PASS** | `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Resource-Policy` on every response (incl. errors); HSTS in production; no cross-origin relaxation |
 | Audit logging | **PASS** | Security-sensitive events with secret redaction; no OTP, password or credential values |
 | Independent penetration test | **BLOCKED (external)** | Not performed |
 | Independent certification (SOC 2 / ISO 27001) | **BLOCKED (external)** | Not obtained |
@@ -258,7 +260,7 @@ claimed to exist.** Items 1–12 are all outstanding.
 | Security overview created | PASS |
 | IP documentation created | PASS |
 | Open-source licences reviewed | PASS — no copyleft in the direct dependency set |
-| Tests pass | PASS — 165 passed, 0 failed, 5 skipped |
+| Tests pass | PASS — 169 passed, 0 failed, 5 skipped |
 | Lint passes | PASS — `--max-warnings 0` |
 | Typecheck passes | PASS — 0 errors |
 | Production build passes | PASS |

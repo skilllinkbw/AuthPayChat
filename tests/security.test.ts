@@ -357,3 +357,39 @@ describe('Security — payment links', () => {
     expect(second.statusCode).toBe(409);
   });
 });
+
+describe('Security — HTTP response headers', () => {
+  let app: FastifyInstance;
+
+  beforeEach(async () => {
+    ({ app } = await newApp('success'));
+  });
+
+  it('sends hardening headers on successful responses', async () => {
+    const response = await app.inject({ method: 'GET', url: '/healthz' });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['x-content-type-options']).toBe('nosniff');
+    expect(response.headers['x-frame-options']).toBe('DENY');
+    expect(response.headers['referrer-policy']).toBe('no-referrer');
+    expect(response.headers['permissions-policy']).toContain('camera=()');
+    expect(response.headers['cross-origin-resource-policy']).toBe('same-origin');
+  });
+
+  it('sends hardening headers on error responses too', async () => {
+    const response = await app.inject({ method: 'GET', url: '/api/auth/me' }); // 401, unauthenticated
+    expect(response.statusCode).toBe(401);
+    expect(response.headers['x-content-type-options']).toBe('nosniff');
+    expect(response.headers['x-frame-options']).toBe('DENY');
+  });
+
+  it('does not relax cross-origin access (no ACAO header)', async () => {
+    const response = await app.inject({ method: 'GET', url: '/healthz', headers: { origin: 'https://evil.example' } });
+    expect(response.headers['access-control-allow-origin']).toBeUndefined();
+  });
+
+  it('sends HSTS only in production (test env must not emit it)', async () => {
+    const response = await app.inject({ method: 'GET', url: '/healthz' });
+    expect(config.isProduction).toBe(false);
+    expect(response.headers['strict-transport-security']).toBeUndefined();
+  });
+});

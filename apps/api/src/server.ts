@@ -57,6 +57,27 @@ export function createServer(options: ServerOptions = {}): FastifyInstance {
   registerAuthContext(app);
 
   /**
+   * Standard security response headers on every response (including errors).
+   * The API is same-origin with the web client behind one reverse proxy, so no
+   * cross-origin relaxation is needed and none is emitted: browsers enforce the
+   * same-origin policy by default. HSTS is added in production, where the proxy
+   * terminates TLS.
+   */
+  if (!config.security.disableHeaders) {
+    app.addHook('onSend', async (_request, reply) => {
+      reply.header('X-Content-Type-Options', 'nosniff');
+      reply.header('X-Frame-Options', 'DENY');
+      reply.header('Referrer-Policy', 'no-referrer');
+      reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+      reply.header('Cross-Origin-Resource-Policy', 'same-origin');
+      reply.header('X-DNS-Prefetch-Control', 'off');
+      if (config.isProduction) {
+        reply.header('Strict-Transport-Security', `max-age=${config.security.hstsMaxAgeSeconds}; includeSubDomains`);
+      }
+    });
+  }
+
+  /**
    * Liveness and readiness. `/healthz` must never touch the database (a DB blip must not
    * take the process out of its container); `/readyz` checks what the service depends on and
    * reports each dependency honestly — it never returns "ready" for something it cannot reach.

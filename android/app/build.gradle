@@ -18,8 +18,14 @@ android {
     }
     buildTypes {
         release {
+            // Shrink and obfuscate the release artifact. ProGuard rules keep the
+            // Capacitor bridge classes the WebView reaches by reflection.
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
             minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
 }

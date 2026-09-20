@@ -73,6 +73,13 @@ export const config = {
     maxAttempts: Number(optional('RECONCILE_MAX_ATTEMPTS', '8')),
   },
 
+  security: {
+    /** Set to 1 to skip the standard security response headers (never do this in production). */
+    disableHeaders: optional('PAYCHAT_DISABLE_SECURITY_HEADERS', '') === '1',
+    /** HSTS is only meaningful over HTTPS; enabled automatically in production. */
+    hstsMaxAgeSeconds: Number(optional('HSTS_MAX_AGE_SECONDS', '31536000')),
+  },
+
   webauthn: {
     rpName: optional('WEBAUTHN_RP_NAME', 'PayChat'),
     rpId: optional('WEBAUTHN_RP_ID', 'localhost'),
