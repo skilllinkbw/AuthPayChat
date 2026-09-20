@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  PayChat Android network security policy — release.
+
+  Transport is TLS-only. Cleartext (plain HTTP) is refused for every destination,
+  including the loopback interface, so no build of the shipped application can be
+  downgraded to an unencrypted connection and no injected cleartext URL can leak
+  credentials or payment data.
+
+  The Capacitor bridge loads the application itself from https://localhost via a
+  WebView asset loader (an in-process scheme interception, not a network socket),
+  which is unaffected by this policy.
+
+  Developer builds that need to reach a local API server use the debug-only
+  override at app/src/debug/res/xml/network_security_config.xml. That override is
+  never part of a release variant.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

@@ -169,8 +169,10 @@ async function main(): Promise<void> {
 function startApiAndCheck(env: Record<string, string>): Promise<{ ok: boolean; detail: string }> {
   return new Promise((resolve) => {
     const port = 4600 + Math.floor(Math.random() * 200);
-    const child = spawn('npx', ['tsx', 'apps/api/src/index.ts'], {
+    // .cmd shims on Windows require a shell (Node >= 18.20, CVE-2024-27980 mitigation).
+    const child = spawn(process.platform === 'win32' ? 'npx.cmd' : 'npx', ['tsx', 'apps/api/src/index.ts'], {
       cwd: process.cwd(),
+      shell: process.platform === 'win32',
       env: {
         ...process.env,
         ...env,

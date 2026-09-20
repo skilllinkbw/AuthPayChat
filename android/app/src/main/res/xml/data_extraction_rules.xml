@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  PayChat Android data-extraction / backup policy (API 31+).
+
+  A financial application must not have its private data (session tokens in the
+  WebView store, cached balances, cached transaction history) copied off the
+  device by cloud backup or device-to-device transfer. Both channels are closed
+  here, and android:allowBackup="false" closes the pre-API-31 path.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </device-transfer>
+</data-extraction-rules>

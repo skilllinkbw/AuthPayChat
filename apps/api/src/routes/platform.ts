@@ -7,7 +7,7 @@ import {
 } from '@simplewebauthn/server';
 import { config } from '../config.js';
 import { Errors } from '@paychat/shared';
-import { requireAuth } from '../security/context.js';
+import { requireAuth, requireInternalJob } from '../security/context.js';
 import * as repo from '../repositories.js';
 import { audit, logEvent } from '../security/audit.js';
 import { issueAccessToken } from '../security/jwt.js';
@@ -175,18 +175,14 @@ export function platformRoutes(app: FastifyInstance, orchestrator: PaymentOrches
     return reply.send({ received: true, status: result.status });
   });
 
-  /** Manual reconciliation trigger (also runs on an interval). */
-  app.post('/api/internal/reconcile', async (request, reply) => {
-    const secret = request.headers['x-paychat-internal'] as string | undefined;
-    if (!secret || secret !== process.env.INTERNAL_JOB_TOKEN) return reply.code(401).send({ error: 'unauthorized' });
+  /** Manual reconciliation trigger (also runs on an interval). Internal token required. */
+  app.post('/api/internal/reconcile', { preHandler: requireInternalJob }, async () => {
     const result = await orchestrator.reconcile();
-    return reply.send(result);
+    return result;
   });
 
-  app.get('/api/internal/outbox', async (request, reply) => {
-    const secret = request.headers['x-paychat-internal'] as string | undefined;
-    if (!secret || secret !== process.env.INTERNAL_JOB_TOKEN) return reply.code(401).send({ error: 'unauthorized' });
-    return reply.send({ pending: repo.outbox.pending().map((o) => ({ id: o.id, type: o.event_type })) });
+  app.get('/api/internal/outbox', { preHandler: requireInternalJob }, async () => {
+    return { pending: repo.outbox.pending().map((o) => ({ id: o.id, type: o.event_type })) };
   });
 }
 

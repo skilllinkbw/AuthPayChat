@@ -20,6 +20,9 @@ import { tmpdir } from 'node:os';
 import Database from 'better-sqlite3';
 
 const repoRoot = process.cwd();
+// Windows spawns .cmd shims for npm/npx; POSIX uses the bare binaries (same pattern as scripts/run-tests.cjs).
+const npmBin = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const npxBin = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 const results: Array<{ scenario: string; ok: boolean; detail: string }> = [];
 let failures = 0;
 
@@ -51,12 +54,59 @@ async function waitForHealth(port: number, timeoutMs = 20_000): Promise<boolean>
   return false;
 }
 
+/** Reads the schema out of a SQLite file, tolerating a just-killed server still holding the handle. */
+function tablesInSafe(dbPath: string, attempts = 4): string[] {
+  for (let i = 0; ; i++) {
+    try {
+      return tablesIn(dbPath);
+    } catch (error) {
+      if (i === attempts - 1) throw error;
+      // SQLITE_IOERR_TRUNCATE right after taskkill: give the OS a moment to release the handle.
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1_000);
+    }
+  }
+}
+
 const children: Array<import('node:child_process').ChildProcess> = [];
 
-function startServer(args: { cwd: string; command: string; commandArgs: string[]; dbPath: string; port: number }): Promise<{ code: number | null; output: string }> {
-  return new Promise((resolve) => {
+/** Terminates the whole process tree — on Windows the shell wrapper survives a plain kill. */
+function killTree(child: import('node:child_process').ChildProcess): void {
+  try {
+    if (process.platform === 'win32' && child.pid) {
+      spawn('taskkill', ['/pid', String(child.pid), '/T', '/F']);
+    } else {
+      child.kill('SIGKILL');
+    }
+  } catch {
+    // already gone
+  }
+}
+
+/** Prints server output to explain an unexpected health result. */
+function diag(healthy: boolean, output: string, label: string): void {
+  if (!healthy) {
+    console.log(`  ! server did not become healthy (${label}); last output:`);
+    console.log(output.split('\n').slice(-20).join('\n'));
+  }
+}
+
+interface ServerRun {
+  /** Resolves when the server process exits (or is killed by the watchdog). */
+  done: Promise<{ code: number | null; output: string }>;
+  /** Output accumulated so far — readable while the server is still running. */
+  liveOutput: () => string;
+  /** Terminates the server immediately (normal shutdown path; watchdog is only a fallback). */
+  stop: () => void;
+}
+
+function startServer(args: { cwd: string; command: string; commandArgs: string[]; dbPath: string; port: number }): ServerRun {
+  let output = '';
+  let childRef: import('node:child_process').ChildProcess | undefined;
+  const done = new Promise<{ code: number | null; output: string }>((resolve) => {
     const child = spawn(args.command, args.commandArgs, {
       cwd: args.cwd,
+      // .cmd shims on Windows require a shell (Node >= 18.20, CVE-2024-27980 mitigation).
+      shell: process.platform === 'win32',
       env: {
         ...process.env,
         PAYCHAT_ENV: 'development',
@@ -68,15 +118,25 @@ function startServer(args: { cwd: string; command: string; commandArgs: string[]
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
-    let output = '';
+    childRef = child;
     child.stdout.on('data', (chunk) => { output += String(chunk); });
     child.stderr.on('data', (chunk) => { output += String(chunk); });
     children.push(child);
-    const settle = (code: number | null) => resolve({ code, output });
-    (child as unknown as { __resolve: (code: number | null) => void }).__resolve = settle;
-    child.on('exit', (code) => settle(code));
-    setTimeout(() => { if (child.exitCode === null) child.kill('SIGKILL'); }, 25_000);
+    child.on('exit', (code) => resolve({ code, output }));
+    // tsx cold-boot on Windows can exceed 20s; keep the watchdog generous so a slow-but-healthy
+    // boot is not killed mid-startup.
+    setTimeout(() => { if (child.exitCode === null) killTree(child); }, 120_000);
   });
+  return { done, liveOutput: () => output, stop: () => { if (childRef) killTree(childRef); } };
+}
+
+/** Links node_modules without the admin privilege that real symlinks require on Windows. */
+function linkNodeModules(target: string, dest: string): void {
+  if (process.platform === 'win32') {
+    symlinkSync(target, dest, 'junction');
+  } else {
+    symlinkSync(target, dest);
+  }
 }
 
 async function main(): Promise<void> {
@@ -84,7 +144,7 @@ async function main(): Promise<void> {
 
   // 0. Build the bundle so we test what actually ships.
   console.log('0. Building the API bundle');
-  execFileSync('npm', ['run', 'build:api'], { cwd: repoRoot, stdio: 'pipe' });
+  execFileSync(npmBin, ['run', 'build:api'], { cwd: repoRoot, stdio: 'pipe', shell: process.platform === 'win32' });
   const bundled = join(repoRoot, 'dist/api/index.js');
   const bundledMigrations = join(repoRoot, 'dist/api/migrations');
   record('build', existsSync(bundled), 'dist/api/index.js produced');
@@ -96,14 +156,13 @@ async function main(): Promise<void> {
   // 1. Source tree (tsx from the repository root)
   {
     const dbPath = join(workspace, 'source.db');
-    const run = startServer({
-      cwd: repoRoot, command: 'npx', commandArgs: ['tsx', 'apps/api/src/index.ts'],
-      dbPath, port: 4511,
-    });
-    const healthy = await waitForHealth(4511);
-    const tables = existsSync(dbPath) ? tablesIn(dbPath) : [];
+    const run = startServer({ cwd: repoRoot, command: npxBin, commandArgs: ['tsx', 'apps/api/src/index.ts'], dbPath, port: 4511 });
+    const healthy = await waitForHealth(4511, 90_000);
+    diag(healthy, run.liveOutput(), 'source tree');
+    const tables = existsSync(dbPath) ? tablesInSafe(dbPath) : [];
     record('source tree', healthy && tables.length > 1, `${tables.length} objects, server healthy=${healthy}`);
-    (await run);
+    run.stop();
+    (await run.done);
   }
 
   // 2. Built bundle executed from a clean directory (container-like: node_modules + dist only)
@@ -112,14 +171,16 @@ async function main(): Promise<void> {
     mkdirSync(join(clean, 'dist/api'), { recursive: true });
     cpSync(bundled, join(clean, 'dist/api/index.js'));
     cpSync(bundledMigrations, join(clean, 'dist/api/migrations'), { recursive: true });
-    symlinkSync(join(repoRoot, 'node_modules'), join(clean, 'node_modules'));
+    linkNodeModules(join(repoRoot, 'node_modules'), join(clean, 'node_modules'));
     const dbPath = join(clean, 'clean.db');
 
     const run = startServer({ cwd: clean, command: 'node', commandArgs: ['dist/api/index.js'], dbPath, port: 4512 });
     const healthy = await waitForHealth(4512);
-    const tables = existsSync(dbPath) ? tablesIn(dbPath) : [];
+    diag(healthy, run.liveOutput(), 'clean directory');
+    const tables = existsSync(dbPath) ? tablesInSafe(dbPath) : [];
     record('clean directory (bundle)', healthy && tables.length > 1, `${tables.length} objects, server healthy=${healthy}`);
-    (await run);
+    run.stop();
+    (await run.done);
   }
 
   // 3. Packaged layout: migrations directory next to the working directory
@@ -128,14 +189,16 @@ async function main(): Promise<void> {
     mkdirSync(packaged, { recursive: true });
     cpSync(bundled, join(packaged, 'index.js'));
     cpSync(bundledMigrations, join(packaged, 'migrations'), { recursive: true });
-    symlinkSync(join(repoRoot, 'node_modules'), join(packaged, 'node_modules'));
+    linkNodeModules(join(repoRoot, 'node_modules'), join(packaged, 'node_modules'));
     const dbPath = join(packaged, 'packaged.db');
 
     const run = startServer({ cwd: packaged, command: 'node', commandArgs: ['index.js'], dbPath, port: 4513 });
     const healthy = await waitForHealth(4513);
-    const tables = existsSync(dbPath) ? tablesIn(dbPath) : [];
+    diag(healthy, run.liveOutput(), 'packaged layout');
+    const tables = existsSync(dbPath) ? tablesInSafe(dbPath) : [];
     record('packaged layout (migrations/ alongside)', healthy && tables.length > 1, `${tables.length} objects, server healthy=${healthy}`);
-    (await run);
+    run.stop();
+    (await run.done);
   }
 
   // 4. Failure mode: no migrations anywhere must fail loudly, never start with a blank schema.
@@ -143,10 +206,10 @@ async function main(): Promise<void> {
     const broken = join(workspace, 'no-migrations');
     mkdirSync(broken, { recursive: true });
     cpSync(bundled, join(broken, 'index.js'));   // deliberately no migrations directory
-    symlinkSync(join(repoRoot, 'node_modules'), join(broken, 'node_modules'));
+    linkNodeModules(join(repoRoot, 'node_modules'), join(broken, 'node_modules'));
     const dbPath = join(broken, 'broken.db');
 
-    const { code, output } = await startServer({ cwd: broken, command: 'node', commandArgs: ['index.js'], dbPath, port: 4514 });
+    const { code, output } = await startServer({ cwd: broken, command: 'node', commandArgs: ['index.js'], dbPath, port: 4514 }).done;
     const loud = code !== 0 && /no migration files found/i.test(output);
     record('failure mode', loud, loud ? 'server refuses to start with an explicit error' : `unexpected exit (code=${code})`);
     if (!existsSync(dbPath)) writeFileSync(join(broken, 'note.txt'), 'no database was created');
@@ -155,17 +218,33 @@ async function main(): Promise<void> {
   }
 
   // 5. Idempotence: running migrations twice changes nothing.
+  // The two boots below use tsx, which on Windows can cold-start unreliably under load
+  // (same environment flakiness scripts/run-tests.cjs works around with a retry).
+  // Each attempt runs BOTH boots against a FRESH database; the schema fingerprint of the
+  // second run must equal the first — proving migrations are a no-op on re-run.
   {
-    const dbPath = join(workspace, 'twice.db');
-    const first = startServer({ cwd: repoRoot, command: 'npx', commandArgs: ['tsx', 'apps/api/src/index.ts'], dbPath, port: 4515 });
-    await waitForHealth(4515);
-    (await first);
-    const before = tablesIn(dbPath).join(',');
-    const second = startServer({ cwd: repoRoot, command: 'npx', commandArgs: ['tsx', 'apps/api/src/index.ts'], dbPath, port: 4516 });
-    await waitForHealth(4516);
-    (await second);
-    const after = tablesIn(dbPath).join(',');
-    record('idempotence', before === after && before.includes('tables:'), 're-running migrations is a no-op');
+    let idempotenceOk = false;
+    for (let attempt = 1; attempt <= 2 && !idempotenceOk; attempt++) {
+      const dbPath = join(workspace, attempt === 1 ? 'twice.db' : `twice-retry-${attempt}.db`);
+      const boot = async (port: number) => {
+        const run = startServer({ cwd: repoRoot, command: npxBin, commandArgs: ['tsx', 'apps/api/src/index.ts'], dbPath, port });
+        const healthy = await waitForHealth(port, 90_000);
+        diag(healthy, run.liveOutput(), `idempotence attempt ${attempt} (port ${port})`);
+        run.stop();
+        (await run.done);
+        return healthy;
+      };
+      const firstHealthy = await boot(4515);
+      const before = tablesInSafe(dbPath).join(',');
+      const secondHealthy = await boot(4516);
+      const after = tablesInSafe(dbPath).join(',');
+      idempotenceOk = firstHealthy && secondHealthy && before === after && before.includes('tables:');
+      if (idempotenceOk) {
+        record('idempotence', true, 're-running migrations is a no-op');
+      } else if (attempt === 2) {
+        record('idempotence', false, `schema fingerprints differ or boots failed (before=${before} after=${after})`);
+      }
+    }
   }
 
   // 6. SQLite and Postgres schema files stay in step.
@@ -183,7 +262,12 @@ async function main(): Promise<void> {
     record('schema parity', missing.length === 0, missing.length ? `missing in one dialect: ${missing.join(', ')}` : 'core tables exist in both dialects');
   }
 
-  rmSync(workspace, { recursive: true, force: true });
+  try {
+    rmSync(workspace, { recursive: true, force: true, maxRetries: 5, retryDelay: 1_000 });
+  } catch (error) {
+    // Non-fatal: a just-killed server may still hold a file handle for a moment.
+    console.log(`  ! temp workspace cleanup incomplete (non-fatal): ${error instanceof Error ? error.message : String(error)}`);
+  }
 
   console.log(`\nMigration verification: ${results.length - failures}/${results.length} checks passed`);
   if (failures > 0) {
@@ -191,7 +275,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
   console.log('Migration discovery verified in every supported layout.\n');
-  for (const child of children) { try { child.kill('SIGKILL'); } catch { /* already gone */ } }
+  for (const child of children) { killTree(child); }
   process.exit(0);
 }
 

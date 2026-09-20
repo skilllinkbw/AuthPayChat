@@ -4,6 +4,7 @@
  */
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { Errors } from '@paychat/shared';
 import { authService } from './auth.js';
 import { audit } from './audit.js';
@@ -42,4 +43,28 @@ export async function requireStepUp(request: FastifyRequest, _reply: FastifyRepl
 
 export function registerAuthContext(app: FastifyInstance): void {
   app.decorateRequest('auth', undefined);
+}
+
+/**
+ * Internal job authorisation (reconciliation / outbox inspection).
+ *
+ * The token is compared with a constant-time comparison over fixed-length
+ * digests. A plain `!==` would leak the secret prefix through response timing on
+ * a hot endpoint, which is enough to recover a token byte by byte. Digesting
+ * both sides first also removes the length as an oracle.
+ *
+ * Denials are audit-logged without ever recording the presented value.
+ */
+export function verifyInternalJobToken(presented: string | string[] | undefined): boolean {
+  const expected = process.env.INTERNAL_JOB_TOKEN;
+  if (!expected || typeof presented !== 'string' || presented.length === 0) return false;
+  const expectedDigest = createHash('sha256').update(expected, 'utf8').digest();
+  const presentedDigest = createHash('sha256').update(presented, 'utf8').digest();
+  return timingSafeEqual(expectedDigest, presentedDigest);
+}
+
+export async function requireInternalJob(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  if (verifyInternalJobToken(request.headers['x-paychat-internal'])) return;
+  audit('security.authorization_denied', { type: 'internal_job', metadata: { path: request.url } }, { ip: request.ip });
+  await reply.code(401).send({ error: { code: 'UNAUTHENTICATED', message: 'Unauthorized.' } });
 }

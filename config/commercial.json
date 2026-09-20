@@ -1,0 +1,51 @@
+{
+  "$comment": "Centralised commercial configuration. Code must read these values rather than hardcoding prices or periods. Values marked null require owner-supplied, verified figures before commercial launch.",
+  "version": 1,
+  "lastUpdated": "2026-09-19",
+  "currency": "BWP",
+  "pricing": {
+    "consumer": {
+      "monthlySubscriptionMinor": 0,
+      "perTransactionFeeMinor": null,
+      "notes": "Consumer pricing is not yet set. Confirm with owner and legal before publishing."
+    },
+    "merchant": {
+      "monthlySubscriptionMinor": null,
+      "perTransactionFeeBps": null,
+      "notes": "Merchant pricing requires a signed commercial agreement per partner."
+    },
+    "enterprise": {
+      "notes": "Quoted per engagement. No published price."
+    },
+    "providerFees": {
+      "notes": "Pass-through provider fees are charged at cost as confirmed by the provider rate card; no default is assumed here."
+    }
+  },
+  "limits": {
+    "minPaymentMinor": 100,
+    "maxPaymentMinor": 100000000,
+    "maxDailyVolumeMinor": null,
+    "stepUpThresholdMinor": null,
+    "maxRecipientsPerDay": null
+  },
+  "trial": {
+    "enabled": false,
+    "durationDays": null
+  },
+  "support": {
+    "email": "support@paychat.bw",
+    "phone": "+267 76 749 821",
+    "hours": "Mon–Fri 08:00–17:00 CAT (Africa/Gaborone)",
+    "criticalIncidentResponseMinutes": 60
+  },
+  "sla": {
+    "availabilityTargetPercent": 99.5,
+    "plannedMaintenanceWindow": "Sundays 01:00–04:00 CAT",
+    "monthlyTransactionReportByDay": 5
+  },
+  "refunds": {
+    "selfServiceWindowHours": 24,
+    "reviewWindowBusinessDays": 7
+  },
+  "placeholderNotice": "Any key with the value null is intentionally unset. Do not substitute invented figures; obtain them from the owner and record the source."
+}
